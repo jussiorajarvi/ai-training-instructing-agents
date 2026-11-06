@@ -1,0 +1,98 @@
+# Name is Step x, where x is the last step number in the exercise.
+name: Step 1
+
+# Trigger when any of the three deliverable files are pushed.
+on:
+  push:
+    paths:
+      - 'CLAUDE.md'
+      - 'app/CLAUDE.md'
+      - 'docs/ReviewFindings.md'
+      - 'docs/ImprovementPlan.md'
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+jobs:
+  exercise_checking:
+    name: Start checking
+    uses: ./.github/workflows/exercise-checking.yml
+
+  # Validates all three exercise deliverables.
+  check_exercise_files:
+    name: Check Exercise Deliverables
+    runs-on: ubuntu-latest
+    needs: exercise_checking
+    if: needs.exercise_checking.outputs.comment-id != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check docs/ReviewFindings.md
+        run: |
+          if [ ! -f "docs/ReviewFindings.md" ]; then
+            echo "Error: docs/ReviewFindings.md not found."
+            exit 1
+          fi
+          if [ ! -s "docs/ReviewFindings.md" ]; then
+            echo "Error: docs/ReviewFindings.md is empty."
+            exit 1
+          fi
+          echo "docs/ReviewFindings.md OK"
+
+      - name: Check docs/ImprovementPlan.md
+        run: |
+          if [ ! -f "docs/ImprovementPlan.md" ]; then
+            echo "Error: docs/ImprovementPlan.md not found."
+            exit 1
+          fi
+          if [ ! -s "docs/ImprovementPlan.md" ]; then
+            echo "Error: docs/ImprovementPlan.md is empty."
+            exit 1
+          fi
+          echo "docs/ImprovementPlan.md OK"
+
+      - name: Check CLAUDE.md
+        run: |
+          if [ -f "CLAUDE.md" ]; then
+            CLAUDE_PATH="CLAUDE.md"
+          elif [ -f "app/CLAUDE.md" ]; then
+            CLAUDE_PATH="app/CLAUDE.md"
+          else
+            echo "Error: CLAUDE.md not found. Create it in the repository root or app directory."
+            exit 1
+          fi
+          # Must have at least 5 non-empty lines
+          non_empty=$(grep -c '[^[:space:]]' "$CLAUDE_PATH" || true)
+          if [ "$non_empty" -lt 5 ]; then
+            echo "Error: $CLAUDE_PATH has only $non_empty non-empty lines. Add your tech stack, architecture rules, and constraints (minimum 5 lines)."
+            exit 1
+          fi
+          # Must contain at least one constraint keyword
+          if ! grep -qiE '\bnot\b|\bavoid\b|\bnever\b' "$CLAUDE_PATH"; then
+            echo "Error: $CLAUDE_PATH does not appear to contain any constraints. Add at least two things Claude must not change."
+            exit 1
+          fi
+          echo "$CLAUDE_PATH OK ($non_empty non-empty lines)"
+
+  exercise_passed:
+    name: Exercise passed
+    needs: [exercise_checking, check_exercise_files]
+    if: needs.check_exercise_files.result == 'success'
+    uses: ./.github/workflows/exercise-passed.yml
+    with:
+      module-title: "Instructing Agents"
+      issue-url: ${{ needs.exercise_checking.outputs.issue-url }}
+      issue-number: ${{ needs.exercise_checking.outputs.issue-number }}
+      comment-id: ${{ needs.exercise_checking.outputs.comment-id }}
+
+  exercise_failed:
+    name: Exercise failed
+    needs: [exercise_checking, check_exercise_files]
+    if: always() && needs.check_exercise_files.result == 'failure'
+    uses: ./.github/workflows/exercise-failed.yml
+    with:
+      comment-id: ${{ needs.exercise_checking.outputs.comment-id }}
+      feedback-message: "One or more deliverables are missing or incomplete. Check that all three files exist and are not empty: `docs/ReviewFindings.md`, `docs/ImprovementPlan.md`, and `CLAUDE.md`. Also make sure `CLAUDE.md` has at least 5 non-empty lines and includes constraints (words like `not`, `avoid`, or `never`)."

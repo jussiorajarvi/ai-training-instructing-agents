@@ -1,0 +1,19 @@
+name: Step 0 # Start Exercise
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+
+jobs:
+  start_exercise:
+    name: Start exercise
+    uses: ./.github/workflows/exercise-start.yml
+    with:
+      module-title: "Instructing Agents"
+      intro-message: "Learn how to extend Claude Code with skills from the community marketplace and invoke them to automate tasks in your development sessions."
